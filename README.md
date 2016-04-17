@@ -15,7 +15,7 @@ In order to ensure the safety of the robot the following (minimum) requirements 
 6. The robot operation must always be based on recent measurement information.
 
 ##3 Our Plan
-1. Using Petri Nets to describe out system.
+1. Using Petri Nets to describe our system.
 2. Design the BIP model and define structural operational semantics of our robot system.
 3. Prove the safety and functionality of our system.
 4. Implement our model or using it to generate executable code.
