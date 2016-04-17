@@ -1,0 +1,76 @@
+package DinningPhilosopher
+
+	port type Port()
+
+	atom type Philosopher()
+
+		export port Port think()
+		export port Port eat()
+		export port Port pick_l()
+		export port Port pick_r()
+		export port Port put()
+
+		place THINKING, HAS_ONE_FORK, HAS_TWO_FORK, FINISH
+
+		initial to THINKING
+		on think from THINKING to THINKING
+		on pick_l from THINKING to HAS_ONE_FORK
+		on pick_r from HAS_ONE_FORK to HAS_TWO_FORK
+		on eat from HAS_TWO_FORK to FINISH
+		on put from FINISH to THINKING
+	end
+
+	atom type Fork()
+		export port Port pick()
+		export port Port put()
+
+		place FREE, USED
+		
+		initial to FREE
+		on pick	from FREE to USED
+		on put from USED to FREE
+	end
+
+	connector type rendezvous2(Port p1, Port p2)
+		define p1 p2 
+	end
+
+	connector type rendezvous3(Port p1, Port p2, Port p3)
+		define p1 p2 p3
+	end
+
+	connector type single(Port p1)
+		define p1
+	end
+
+	compound type Philosophers()
+		component Philosopher P1()
+		component Fork F1()
+		component Philosopher P2()
+		component Fork F2()
+		component Philosopher P3()
+		component Fork F3()
+	
+
+		connector single P1_think(P1.think)
+		connector single P1_eat(P1.eat)
+		connector rendezvous2 P1_pick_l(P1.pick_l, F1.pick)
+		connector rendezvous2 P1_pick_r(P1.pick_r, F3.pick)
+		connector rendezvous3 P1_put(P1.put, F1.put, F3.put)
+
+		connector single P2_think(P2.think)
+		connector single P2_eat(P2.eat)
+		connector rendezvous2 P2_pick_l(P2.pick_l, F2.pick)
+		connector rendezvous2 P2_pick_r(P2.pick_r, F1.pick)
+		connector rendezvous3 P2_put(P2.put, F2.put, F1.put)
+
+		connector single P3_think(P3.think)
+		connector single P3_eat(P3.eat)
+		connector rendezvous2 P3_pick_l(P3.pick_l, F3.pick)
+		connector rendezvous2 P3_pick_r(P3.pick_r, F2.pick)
+		connector rendezvous3 P3_put(P3.put, F3.put, F2.put)
+
+	
+
+	end
+end
