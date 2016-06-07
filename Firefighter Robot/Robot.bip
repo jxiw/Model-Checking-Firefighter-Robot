@@ -1,0 +1,229 @@
+@cpp(include="stdlib.h")
+package Robot
+	extern function int rand()
+
+	port type Port()
+	port type Port1P(int t)
+	port type Port4P(int lt,int rt,int ut,int dt)
+	port type Port5P(int lt,int rt,int ut,int dt,int commandNS)
+	//Action a: get the temperature around the Robot 				-	Buffer  
+	//Action b: send temperature and current location info to NS	-	Navigation System :out
+	//Action c: rotate to one definited by Algorithm
+	//Action d: found a vicitim
+	//Action e: send found-vicitim info to the tramsimitter 		-	Transimiter
+	//Action f: ask the next eigne Action 							-	Algorithm  :out
+	//Action h: get a reply from NavigationSystem 					-	Navigation System :in
+	//Action i: get next action command 							-	Algorithm  :in
+	//Action k: clear all the buffer 								-	Buffer :out
+	//Action g: can go advance 				
+	//Action m: complete its mission
+	
+		
+	atom type Engine()
+		data int lt
+		data int rt
+		data int ut
+		data int dt
+		data int commandNS
+		data int commandAL
+
+		export port Port4P a(lt,rt,ut,dt)
+		export port Port1P b(lt)
+		export port Port1P i(commandAL)
+		export port Port1P   h(commandNS)
+		export port Port5P   f( lt, rt, ut, dt, commandNS)
+		export port Port   e()
+		export port Port   k()
+
+		//place Start, S1,WaitforNS,S2,WaitforAl,End,S5,S3,S4,S6
+		place Start, S1,WaitforNS,S2,WaitforAl,S5,S3,S4,S6
+		initial to Start				 do{lt=-1;rt=-1;ut=-1;dt=-1;commandNS=2;commandAL=-1;}
+		on a from Start to S1
+		on b from S1 to WaitforNS
+		on h from WaitforNS to S2
+		internal from S2 to S6			provided(commandNS%2==0)//action d
+		on e from S6 to Start
+		on f from S2 to WaitforAl 		provided(commandNS%2!=0)//action f
+		on i from WaitforAl to S3
+		//internal from S3 to End  provided(commandAL==0)//action m
+		internal from S3 to S5 			provided(commandAL==1)//action g
+		internal from S3 to S4			provided(commandAL==2)//action c
+		on k from S5 to Start			//action k
+		internal from S4 to S5			
+		internal from S3 to Start				provided(commandAL==3)
+	end
+
+
+	//Action h: send a message to Engine	out- Engine
+	//Action b: get a request from Engine 	in- Engine
+	//Action a: find a vicitim
+	//Action Noway: face wall or border
+	atom type NavigationSystem()
+		data int commandNS
+		data int info
+		export port Port1P b(info)
+		export port Port1P h(commandNS)
+
+
+		place Wait,S1,S2,Start
+
+		initial to Wait 		do{commandNS=-1;}
+
+		internal from Start to S1	provided(info%2==0)	do{commandNS=rand()%100;}
+		internal from Start	to S2	provided(info%2==1)	do{commandNS=rand()%100;}
+		on h from S1 to Wait 
+		on h from S2 to Wait 		
+		on b from Wait to Start
+	end 
+
+	//Action e: find a vicitim 	in - Engine
+	//Action j:	send a message to the mission center
+	atom type Transimiter()
+	export port Port e()
+
+	place Work,Wait
+	initial to Wait
+
+	on e from Wait to Work
+	internal from Work to Wait
+
+	end
+
+	//Action a: take all the message out-Engine
+	//Action k: clear the buffer 		-Engine
+	//Action p: put a message to the buffer in-Sensor
+	atom type Buffer()
+	data int t
+
+	export port Port1P	a(t)
+	export port Port1P 	p(t)
+	export port Port1P 	k(t)
+
+	place Empty,Full
+	initial to Empty		do{t=-1;}
+
+	on a from Full to Empty
+	on p from Full to Full
+	on p from Empty to Full
+	on k from Full to Empty
+	on k from Empty to Empty 
+
+	end
+
+	//Action p: put a message to the buffer out-Buffer
+	//Action Measure: if step == 50
+	//Action Increment: step+=1
+	atom type Sensor()
+		data int step
+		data int t
+		export port Port1P p(t)
+		place Wait,Measure 
+
+		initial to Wait 	do{step=0;t=rand()%50;}
+
+		internal from Wait to Wait 	provided(step<50)		do{step=step+1;}
+		internal from Wait to Measure provided(step==50)	do{t=rand()%50;}
+		on p from Measure to Wait 							do{step=0;}
+
+	end
+
+	atom type SearchAlgorithm()
+		data int commandAL
+		data int lt
+		data int rt
+		data int ut
+		data int dt
+		data int commandNS
+
+		export port Port5P f( lt, rt, ut, dt, commandNS)
+		export port Port1P i(commandAL)
+
+		place Wait,Start
+
+		initial to Wait 	do{commandAL=1;}
+		on f from Wait to Start do{commandAL=rand()%3+1;}
+		on i from Start to Wait
+	end
+
+
+	//Action a
+	connector type getTemeratures(Port1P p1, Port1P p2,Port1P p3,Port1P p4,Port4P p5)
+		define p1 p2 p3 p4 p5
+		on p1 p2 p3 p4 p5 down {p5.lt=p1.t;p5.rt=p2.t;p5.ut=p3.t;p5.dt=p4.t;}
+	end
+
+	//Action b
+	connector type sendRequestToNS(Port1P p1, Port1P p2)
+		define p1 p2 
+		on p1 p2 down {p2.t=p1.t;}
+	end
+
+	//Action h
+	connector type getReplyFrNS(Port1P p1, Port1P p2)
+		define p1 p2 
+		on p1 p2 down {p1.t=p2.t;}
+	end
+
+	//Action f
+	connector type sendRequestToAl(Port5P p1, Port5P p2)
+		define p1 p2 
+	end
+
+	//Action i
+	connector type getReplyFrAL(Port1P p1,Port1P p2)
+		define p1 p2
+		on p1 p2 down {p1.t=p2.t;}
+	end
+
+	//Action k
+	connector type sendRequestToBuffer(Port p0,Port1P p1,Port1P p2,Port1P p3,Port1P p4)
+		define p0 p1 p2 p3 p4
+		//on p0 p1 p2 p3 p4 down {p1.t=-1;p2.t=-1;p3.t=-1;p4.t=-1;}
+	end
+
+	//Action e 
+	connector type sendRequestToTrans(Port p1,Port p2)
+		define p1 p2
+	end
+
+
+	//Action p
+	connector type putMessage(Port1P p1,Port1P p2)
+		define p1 p2
+		on p1 p2 down {p2.t=p1.t;}
+	end
+
+
+
+
+	compound type RobotCompound()
+		component Engine eig()
+		component Transimiter transim()
+		component NavigationSystem nasys()
+		component SearchAlgorithm sal()
+		component Buffer bl()
+		component Buffer br()
+		component Buffer bu()
+		component Buffer bd()
+		component Sensor senl()
+		component Sensor senr()
+		component Sensor senu()
+		component Sensor send()
+		//Engine
+        connector	getTemeratures EngineFrBuffer(bl.a, br.a, bu.a, bd.a,eig.a)
+        connector	sendRequestToNS EnginetoNS(eig.b, nasys.b)
+        connector	getReplyFrNS NStoEngine(eig.h,nasys.h)
+        connector	sendRequestToAl EnginetoAL(eig.f,sal.f)
+        connector	getReplyFrAL ALtoEngine(eig.i,sal.i)
+        connector	sendRequestToBuffer EngineToBuffer(eig.k,bl.k,br.k,bu.k,bd.k)
+        connector	sendRequestToTrans EnginetoTrans(eig.e,transim.e)
+
+        //Buffer and Sensor
+        connector	putMessage	SBl(senl.p,bl.p)
+        connector	putMessage	SBr(senr.p,br.p)
+        connector	putMessage	SBu(senu.p,bu.p)
+        connector	putMessage	SBd(send.p,bd.p)
+
+	end
+
+end 

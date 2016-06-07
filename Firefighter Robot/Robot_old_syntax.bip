@@ -1,0 +1,284 @@
+model Robot
+	port type Port0
+	port type Port1P(int t)
+	port type Port4P(int lt,int rt,int ut,int dt)
+	port type Port5P(int lt,int rt,int ut,int dt,int commandNS)
+	//Action a: get the temperature around the Robot 				-	Buffer  
+	//Action b: send temperature and current location info to NS	-	Navigation System :out
+	//Action c: rotate to one definited by Algorithm
+	//Action d: found a vicitim
+	//Action e: send found-vicitim info to the tramsimitter 		-	Transimiter
+	//Action f: ask the next eigne Action 							-	Algorithm  :out
+	//Action h: get a reply from NavigationSystem 					-	Navigation System :in
+	//Action i: get next action command 							-	Algorithm  :in
+	//Action k: clear all the buffer 								-	Buffer :out
+	//Action g: can go advance 				
+	//Action m: complete its mission
+	//commandNS 0: there is no wall ;1: there is a wall ;2: find a victim;
+	//commandAL 0: can go advance; 1,2,3(three different direction): rotate and then go advance; 4: can not go advance;
+		
+	atomic type Engine
+		data int lt
+		data int rt
+		data int ut
+		data int dt
+		data int commandNS
+		data int commandAL
+
+		export port Port4P a(lt,rt,ut,dt)
+		export port Port1P b(lt)
+		export port Port1P i(commandAL)
+		export port Port1P   h(commandNS)
+		export port Port5P   f( lt, rt, ut, dt, commandNS)
+		export port Port0  e
+		export port Port0   k
+		//internal port
+		export port Port1P inp1(commandNS) 
+		//export port Port1P inp2(commandAL)
+		export port Port1P inp3(commandAL) 
+		export port Port1P inp4(commandAL) 
+		export port Port1P inp5(commandAL)  
+		export port Port1P inp6(commandAL)  
+		
+		//place Start, S1,WaitforNS,S2,WaitforAl,End,S5,S3,S4,S6
+		place Start, S1,WaitforNS,S2,WaitforAl,S5,S3,S4,S6
+		
+		initial to Start				 //do{lt=-1;rt=-1;ut=-1;dt=-1;commandNS=-1;commandAL=-1;}
+		on a from Start to S1
+		on b from S1 to WaitforNS
+		on h from WaitforNS to S2
+		on e from S6 to Start
+		on f from S2 to WaitforAl 		provided(commandNS%3==0 || commandNS%3==1)  //action f
+		on i from WaitforAl to S3
+		on k from S5 to Start			//action k
+		//on a from S4 to S1				provided(commandAL%5==4) 
+		
+		//internal port	
+		//on inp1 from S2 to S6			provided(commandNS%3==2)   //action d
+		//on inp2 from S3 to End  provided(commandAL%4==0)//action m
+		//on inp3 from S3 to S5 			provided(commandAL%5==0)//action g
+		//on inp4 from S3 to S4			provided(commandAL%5==1||commandAL%5==2||commandAL%5==3||commandAL%5==4 )//action c	
+		//on inp5 from S4 to S5			provided(commandAL%5==1||commandAL%5==2||commandAL%5==3)
+		
+		//internal port	
+		on inp1 from S2 to S6			provided(commandNS%3==2)   //action d
+		on inp3 from S3 to S5 			provided( ut%3 < 2)//action g
+		on inp4 from S3 to S4			provided( lt%3 < 2 || rt%3 < 2 || dt%3 < 2)//action c	
+		on inp5 from S4 to S5			
+		on inp6 from S3 to Start        provided(ut%3==2 && lt%3==2 && rt%3==2 && dt%3==2)
+	end
+	//internal
+	connector type internalaction(Port1P p1)
+		define p1 
+	end
+
+
+	//Action h: send a message to Engine	out- Engine
+	//Action b: get a request from Engine 	in- Engine
+	//Action a: find a vicitim
+	//Action Noway: face wall or border
+	atomic type NavigationSystem
+		data int commandNS
+		data int info
+		data int seed
+		export port Port1P b(info)
+		export port Port1P h(commandNS)
+		//internal port
+		export port Port1P inp1(info)
+		export port Port1P inp2(info)
+
+		place Wait,S1,S2,Start
+
+		initial to Wait 		//do{commandNS=-1;}
+		//internal port
+		on inp1 from Start to S1	provided(info%2==0)	do{seed=seed+1;commandNS=2;} //do{commandNS=rand()%8;}
+		on inp2 from Start to S2	provided(info%2==1)	do{commandNS=seed%2;seed=seed+1;} //do{commandNS=rand()%8;}
+
+		on h from S1 to Wait 
+		on h from S2 to Wait 		
+		on b from Wait to Start
+	end 
+
+	//Action e: find a vicitim 	in - Engine
+	//Action j:	send a message to the mission center
+	atomic type Transimiter
+	export port Port0 e
+	export port Port0 inp
+	place Work,Wait
+	initial to Wait
+
+	on e from Wait to Work
+	on inp from Work to Wait
+
+	end
+//internal
+	connector type internalaction0(Port0 p1)
+		define p1
+	end
+	
+	//Action a: take all the message out-Engine
+	//Action k: clear the buffer 		-Engine
+	//Action p: put a message to the buffer in-Sensor
+	atomic type Buffer
+	data int t
+
+	export port Port1P	a(t)
+	export port Port1P 	p(t)
+	export port Port1P 	k(t)
+
+	place Empty,Full
+	initial to Empty		//do{t=-1;}
+
+	on a from Full to Empty
+	on p from Full to Full
+	on p from Empty to Full
+	on k from Full to Empty
+	on k from Empty to Empty 
+
+	end
+
+	//Action p: put a message to the buffer out-Buffer
+	//Action Measure: if step == 50
+	//Action Increment: step+=1
+	atomic type Sensor
+		data int step
+		data int t
+		export port Port1P p(t)
+		//internal
+		export port Port1P inp1(step)
+		export port Port1P inp2(step)		
+		place Wait,Measure 
+
+		initial to Wait 	//do{step=0;t=rand()%50;}
+		//internal
+		on inp1 from Wait to Wait 	provided(step<4)		do{step=step+1;}
+		on inp2 from Wait to Measure  provided(step==4)	    do{t=t+1;}
+		on p from Measure to Wait 							do{step=0;}
+
+	end
+
+	atomic type SearchAlgorithm
+		data int commandAL
+		data int lt
+		data int rt
+		data int ut
+		data int dt
+		data int commandNS
+		//data int seed
+		data int tmp
+		export port Port5P f( lt, rt, ut, dt, commandNS)
+		export port Port1P i(commandAL)
+
+		place Wait,Start
+
+		initial to Wait 	//do{commandAL=0;}
+		on f from Wait to Start do{
+		//commandAL=commandAL+1;
+		//seed=seed+1;
+		tmp=lt+rt+ut+dt;
+		commandAL = tmp + commandNS;
+		}
+		on i from Start to Wait
+	end
+
+
+	//Action a
+	connector type getTemeratures(Port1P p1, Port1P p2,Port1P p3,Port1P p4,Port4P p5)
+		define p1 p2 p3 p4 p5
+		on p1 p2 p3 p4 p5 down {p5.lt=p1.t;p5.rt=p2.t;p5.ut=p3.t;p5.dt=p4.t;}
+	end
+
+	//Action b
+	connector type sendRequestToNS(Port1P p1, Port1P p2)
+		define p1 p2 
+		on p1 p2 down {p2.t=p1.t;}
+	end
+
+	//Action h
+	connector type getReplyFrNS(Port1P p1, Port1P p2)
+		define p1 p2 
+		on p1 p2 down {p1.t=p2.t;}
+	end
+
+	//Action f
+	connector type sendRequestToAl(Port5P p1, Port5P p2)
+		define p1 p2 
+		on p1 p2 down {p2.lt=p1.lt;p2.rt=p1.rt;p2.ut=p1.ut;p2.dt=p1.dt;p2.commandNS=p1.commandNS;}
+	end
+
+	//Action i
+	connector type getReplyFrAL(Port1P p1,Port1P p2)
+		define p1 p2
+		on p1 p2 down {p1.t=p2.t;}
+	end
+
+	//Action k
+	connector type sendRequestToBuffer(Port0 p0,Port1P p1,Port1P p2,Port1P p3,Port1P p4)
+		define p0 p1 p2 p3 p4
+		//on p0 p1 p2 p3 p4 down {p1.t=1;p2.t=1;p3.t=1;p4.t=1;}
+	end
+
+	//Action e 
+	connector type sendRequestToTrans(Port0 p1,Port0 p2)
+		define p1 p2
+	end
+
+
+	//Action p
+	connector type putMessage(Port1P p1,Port1P p2)
+		define p1 p2
+		on p1 p2 down {p2.t=p1.t;}
+	end
+
+
+
+
+	compound type RobotCompound
+		component Engine eig
+		component Transimiter transim
+		component NavigationSystem nasys
+		component SearchAlgorithm sal
+		component Buffer bleft
+		component Buffer bright
+		component Buffer bup
+		component Buffer bdown
+		component Sensor senleft
+		component Sensor senright
+		component Sensor senup
+		component Sensor sendown
+		//Engine
+        	connector	getTemeratures EngineFrBuffer(bleft.a, bright.a, bup.a, bdown.a,eig.a)
+        	connector	sendRequestToNS EnginetoNS(eig.b, nasys.b)
+        	connector	getReplyFrNS NStoEngine(eig.h,nasys.h)
+        	connector	sendRequestToAl EnginetoAL(eig.f,sal.f)
+        	connector	getReplyFrAL ALtoEngine(eig.i,sal.i)
+       		connector	sendRequestToBuffer EngineToBuffer(eig.k,bleft.k,bright.k,bup.k,bdown.k)
+        	connector	sendRequestToTrans EnginetoTrans(eig.e,transim.e)
+
+        	//Buffer and Sensor
+        	connector	putMessage	SBl(senleft.p,bleft.p)
+        	connector	putMessage	SBr(senright.p,bright.p)
+        	connector	putMessage	SBu(senup.p,bup.p)
+        	connector	putMessage	SBd(sendown.p,bdown.p)
+		//internal
+		connector internalaction nouse1(eig.inp1)
+		//connector internalaction nouse2(eig.inp2)
+		connector internalaction nouse3(eig.inp3)
+		connector internalaction nouse4(eig.inp4)
+		connector internalaction nouse5(eig.inp5)
+		connector internalaction nouse17(eig.inp6)
+		connector internalaction nouse6(nasys.inp1)
+		connector internalaction nouse16(nasys.inp2)
+		connector internalaction0 nouse7(transim.inp)
+		connector internalaction nouse8(senleft.inp2)
+		connector internalaction nouse9(senleft.inp1)
+		connector internalaction nouse10(senright.inp2)
+		connector internalaction nouse11(senright.inp1)
+		connector internalaction nouse12(senup.inp2)
+		connector internalaction nouse13(senup.inp1)
+		connector internalaction nouse14(sendown.inp2)
+		connector internalaction nouse15(sendown.inp1)
+		
+	end
+		component RobotCompound T
+end 
